@@ -1,0 +1,72 @@
+name: Test PostgreSQL Commands
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15  # Use a specific PostgreSQL version
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd="pg_isready -U testuser -d testdb"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+    # Checkout the repository
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # Wait for PostgreSQL service
+    - name: Wait for PostgreSQL to be Ready
+      run: |
+        for i in {1..10}; do
+          if pg_isready -h localhost -p 5432 -U testuser; then
+            echo "PostgreSQL is ready!"
+            break
+          fi
+          echo "Waiting for PostgreSQL..."
+          sleep 3
+        done
+
+    # Run SQL commands
+    - name: Execute SQL Commands
+      env:
+        PGPASSWORD: testpassword
+      run: |
+        psql -h localhost -U testuser -d testdb -c "CREATE TABLE test (id SERIAL PRIMARY KEY, name TEXT);"
+        psql -h localhost -U testuser -d testdb -c "INSERT INTO test (name) VALUES ('Alice'), ('Bob');"
+        psql -h localhost -U testuser -d testdb -c "SELECT * FROM test;" > output.log
+
+    # Verify SQL results
+    - name: Verify SQL Output
+      run: |
+        if ! grep -q "Alice" output.log || ! grep -q "Bob" output.log; then
+          echo "Test failed: Expected output not found in query results."
+          cat output.log
+          exit 1
+        else
+          echo "Test passed: Query results are as expected."
+        fi
+
+    # Upload logs (optional, for debugging)
+    - name: Upload Logs
+      uses: actions/upload-artifact@v3
+      with:
+        name: postgres-test-logs
+        path: output.log
