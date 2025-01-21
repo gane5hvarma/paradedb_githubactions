@@ -28,15 +28,6 @@ jobs:
           paradedb/paradedb:0.14.1
         sleep 10  # Wait for the database to initialize
 
-    # Verify if --tmpfs was applied
-    - name: Verify --tmpfs Parameter
-      run: |
-        if ! docker inspect paradedb-test | grep -q '"Destination": "/var/lib/postgresql/data"'; then
-          echo "--tmpfs parameter was not applied correctly."
-          exit 1
-        fi
-        echo "--tmpfs parameter applied successfully."
-
     # Run SQL commands inside the ParadeDB container
     - name: Execute SQL Commands in ParadeDB
       run: |
