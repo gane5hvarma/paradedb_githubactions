@@ -1,0 +1,72 @@
+name: Test ParadeDB Container with PostgreSQL
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-paradedb:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the repository
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # Run the ParadeDB container
+    - name: Start ParadeDB Container
+      run: |
+        docker run -d --name paradedb-test \
+          --tmpfs /var/lib/postgresql/data:rw \
+          -e POSTGRES_USER=postgres \
+          -e POSTGRES_PASSWORD=postgres \
+          -e POSTGRES_DB=paradedb \
+          paradedb/paradedb:0.14.1
+        sleep 10  # Wait for the database to initialize
+
+    # Verify if --tmpfs was applied
+    - name: Verify --tmpfs Parameter
+      run: |
+        if ! docker inspect paradedb-test | grep -q '"Destination": "/var/lib/postgresql/data"'; then
+          echo "--tmpfs parameter was not applied correctly."
+          exit 1
+        fi
+        echo "--tmpfs parameter applied successfully."
+
+    # Run SQL commands inside the ParadeDB container
+    - name: Execute SQL Commands in ParadeDB
+      run: |
+        docker exec -i paradedb-test psql -U postgres -d paradedb <<EOF
+        CREATE TABLE test (id SERIAL PRIMARY KEY, name TEXT);
+        INSERT INTO test (name) VALUES ('Alice'), ('Bob');
+        SELECT * FROM test;
+        EOF
+
+    # Verify results from the ParadeDB container
+    - name: Verify SQL Command Output
+      run: |
+        docker exec -i paradedb-test psql -U postgres -d paradedb -c "SELECT * FROM test;" > output.log
+        if ! grep -q "Alice" output.log || ! grep -q "Bob" output.log; then
+          echo "Test failed: Expected data not found in query results."
+          cat output.log
+          exit 1
+        else
+          echo "Test passed: Query results are as expected."
+        fi
+
+    # Upload logs (optional, for debugging)
+    - name: Upload Logs
+      uses: actions/upload-artifact@v3
+      with:
+        name: paradedb-test-logs
+        path: output.log
+
+    # Cleanup
+    - name: Cleanup
+      run: |
+        docker stop paradedb-test
+        docker rm paradedb-test
