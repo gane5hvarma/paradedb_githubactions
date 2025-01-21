@@ -21,7 +21,7 @@ jobs:
     - name: Start ParadeDB Container
       run: |
         docker run -d --name paradedb-test \
-          --tmpfs /var/lib/postgresql:rw \
+          --tmpfs /var/lib/postgresql/data:rw,uid=999,gid=999 \
           -e POSTGRES_USER=postgres \
           -e POSTGRES_PASSWORD=postgres \
           -e POSTGRES_DB=paradedb \
@@ -31,7 +31,7 @@ jobs:
     # Verify if --tmpfs was applied
     - name: Verify --tmpfs Parameter
       run: |
-        if ! docker inspect paradedb-test | grep -q '"Destination": "/var/lib/postgresql"'; then
+        if ! docker inspect paradedb-test | grep -q '"Destination": "/var/lib/postgresql/data"'; then
           echo "--tmpfs parameter was not applied correctly."
           exit 1
         fi
